@@ -20,18 +20,39 @@ const cleanupTimer = setInterval(() => {
 cleanupTimer.unref();
 
 function clientIdentifier(c: Parameters<MiddlewareHandler>[0]): string {
-  if (config.TRUST_PROXY) {
-    const forwarded = c.req
-      .header("x-forwarded-for")
-      ?.split(",")
-      .map((value) => value.trim())
-      .filter((value) => ipaddr.isValid(value));
-    const trustedClientIndex = forwarded ? forwarded.length - config.TRUST_PROXY_HOPS : -1;
-    if (forwarded && trustedClientIndex >= 0) return forwarded[trustedClientIndex];
-    const realIp = c.req.header("x-real-ip")?.trim();
-    if (realIp && ipaddr.isValid(realIp)) return realIp;
+  const cfConnectingIp = c.req.header("cf-connecting-ip")?.trim();
+  if (cfConnectingIp && ipaddr.isValid(cfConnectingIp)) {
+    return cfConnectingIp;
   }
-  return getConnInfo(c).remote.address || "unknown";
+
+  const realIp = c.req.header("x-real-ip")?.trim();
+  if (realIp && ipaddr.isValid(realIp)) {
+    return realIp;
+  }
+
+  const forwarded = c.req
+    .header("x-forwarded-for")
+    ?.split(",")
+    .map((value) => value.trim())
+    .filter((value) => ipaddr.isValid(value));
+
+  if (config.TRUST_PROXY) {
+    const trustedClientIndex = forwarded ? forwarded.length - config.TRUST_PROXY_HOPS : -1;
+    if (forwarded && trustedClientIndex >= 0) {
+      return forwarded[trustedClientIndex];
+    }
+  } else if (forwarded && forwarded.length > 0) {
+    return forwarded[0];
+  }
+
+  try {
+    const conn = getConnInfo(c);
+    if (conn.remote.address) {
+      return conn.remote.address;
+    }
+  } catch {}
+
+  return "unknown";
 }
 
 export function rateLimit(maxRequests = 30, windowMs = 60_000): MiddlewareHandler {

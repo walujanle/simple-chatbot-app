@@ -79,6 +79,8 @@ export function createApp(): Hono<RootEnv> {
     logError("unhandled_request_error", {
       requestId,
       errorType: error instanceof Error ? error.name : "UnknownError",
+      errorMessage: error instanceof Error ? error.message : String(error),
+      errorStack: error instanceof Error ? error.stack : undefined,
     });
     return c.json({ error: { message: "Internal server error", code: "INTERNAL_ERROR" } }, 500);
   });

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.2 - 13 June 2026
+
+### Fixed
+
+- **Crash in rate limit middleware on serverless environments:** Wrap `getConnInfo(c)` in a try-catch block and implement fallback checking for standard HTTP proxy headers (`cf-connecting-ip`, `x-real-ip`, `x-forwarded-for`) to prevent `TypeError` when running outside a Node-native socket environment.
+- **Enhanced production request error logging:** Update global `onError` handler to log full error messages and stack traces to simplify troubleshooting.
+
 ## 0.1.1 - 13 June 2026
 
 ### Fixed
