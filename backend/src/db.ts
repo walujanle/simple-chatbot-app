@@ -29,9 +29,23 @@ function createDialect() {
   }
 
   if (databaseClient === "postgresql") {
+    const pgUrl = new URL(config.DATABASE_URL);
+    const sslmode = pgUrl.searchParams.get("sslmode") ?? "";
+
+    pgUrl.searchParams.delete("sslmode");
+
+    const strictModes = new Set(["verify-ca", "verify-full"]);
+    const relaxedModes = new Set(["prefer", "require"]);
+    const ssl = strictModes.has(sslmode)
+      ? { rejectUnauthorized: true }
+      : relaxedModes.has(sslmode)
+        ? { rejectUnauthorized: false }
+        : undefined;
+
     return new PostgresDialect({
       pool: new pg.Pool({
-        connectionString: config.DATABASE_URL,
+        connectionString: pgUrl.toString(),
+        ssl,
         max: 10,
         idleTimeoutMillis: 30_000,
         connectionTimeoutMillis: 10_000,

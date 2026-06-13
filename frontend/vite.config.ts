@@ -5,7 +5,7 @@ import { defineConfig, loadEnv, type Plugin } from "vite";
 const loopbackHosts = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
 function staticHostHeaders(apiBaseUrl: string, scriptOrigins: string[], connectOrigins: string[]): Plugin {
-  const scriptSources = new Set(["'self'", ...scriptOrigins]);
+  const scriptSources = new Set(["'self'", "'unsafe-inline'", ...scriptOrigins]);
   const connectSources = new Set(["'self'", ...connectOrigins]);
   if (apiBaseUrl) connectSources.add(new URL(apiBaseUrl).origin);
 
@@ -23,7 +23,7 @@ function staticHostHeaders(apiBaseUrl: string, scriptOrigins: string[], connectO
   Strict-Transport-Security: max-age=31536000
   Cross-Origin-Opener-Policy: same-origin
   Cross-Origin-Resource-Policy: same-origin
-  Content-Security-Policy: default-src 'self'; script-src ${[...scriptSources].join(" ")}; style-src 'self'; img-src 'self' data:; font-src 'self' data:; connect-src ${[...connectSources].join(" ")}; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'
+  Content-Security-Policy: default-src 'self'; script-src ${[...scriptSources].join(" ")}; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src ${[...connectSources].join(" ")}; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'
 
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
