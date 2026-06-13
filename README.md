@@ -2,7 +2,7 @@
 
 A self-hosted, multi-provider AI chatbot built with React and Hono. Users bring their own provider credentials and can stream responses, opt into web research or provider reasoning, preserve long conversations with rolling summaries, and inspect response metadata.
 
-> **Release status:** `v0.1.2` is a public beta. The fully verified backend target is one long-lived Node.js process. Static frontend deployment is supported on hosts that can apply SPA rewrites and security headers. Serverless adapters are not included in this release.
+> **Release status:** `v0.1.3` is a public beta. The fully verified backend target is one long-lived Node.js process. Static frontend deployment is supported on hosts that can apply SPA rewrites and security headers. Serverless adapters are not included in this release.
 
 ## Highlights
 

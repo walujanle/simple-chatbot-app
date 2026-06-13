@@ -2,7 +2,7 @@
 
 ## Supported Release Target
 
-For `v0.1.2`, the fully verified topology is:
+For `v0.1.3`, the fully verified topology is:
 
 - a static frontend host that applies SPA rewrites and the generated security headers
 - one long-lived Node.js 24+ backend process
