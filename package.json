@@ -1,0 +1,23 @@
+{
+  "name": "simple-chatbot-app",
+  "version": "0.1.0",
+  "description": "Self-hosted multi-provider AI chatbot",
+  "private": true,
+  "scripts": {
+    "check": "biome check .",
+    "check:write": "biome check --write .",
+    "format": "biome format --write .",
+    "build": "npm --prefix backend run build && npm --prefix frontend run build",
+    "test": "npm --prefix backend test",
+    "test:smoke": "cross-env NODE_ENV=production node scripts/smoke.mjs",
+    "verify": "npm run check && npm run test && npm run build && npm run test:smoke"
+  },
+  "keywords": [],
+  "author": "Leonard Walujan",
+  "license": "MIT",
+  "type": "module",
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.0",
+    "cross-env": "^10.1.0"
+  }
+}

@@ -1,0 +1,154 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@theme {
+  --color-surface: #0a0a0a;
+  --color-surface-950: #0f0f0f;
+  --color-surface-900: #161616;
+  --color-surface-800: #1e1e1e;
+  --color-surface-700: #2a2a2a;
+  --color-surface-600: #363636;
+  --color-surface-500: #444444;
+  --color-surface-400: #5a5a5a;
+  --color-surface-300: #7a7a7a;
+  --color-surface-200: #9e9e9e;
+  --color-surface-100: #c7c7c7;
+  --color-surface-50: #e8e8e8;
+  --font-sans: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", monospace;
+  --animate-fade-in: fade-in 0.3s ease-out;
+  --animate-slide-up: slide-up 0.3s ease-out;
+  --animate-slide-in-right: slide-in-right 0.3s ease-out;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes typing-pulse {
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@layer base {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.15);
+    border-radius: 3px;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(255, 255, 255, 0.25);
+  }
+
+  html {
+    @apply bg-surface;
+  }
+
+  body {
+    @apply min-h-dvh overflow-hidden;
+  }
+
+  button,
+  input,
+  textarea {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/25 focus-visible:ring-offset-0;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      scroll-behavior: auto;
+      animation-duration: 0.01ms;
+      animation-iteration-count: 1;
+      transition-duration: 0.01ms;
+    }
+  }
+}
+
+@layer components {
+  .glass {
+    @apply bg-surface-800/80 backdrop-blur-xl border border-white/10 shadow-xl;
+  }
+
+  .glass-hover {
+    @apply hover:bg-surface-700/60 hover:border-white/20 transition-all duration-200;
+  }
+
+  .input-field {
+    @apply w-full bg-surface-900 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/30 focus-visible:outline-none focus-visible:border-white/25 focus-visible:ring-2 focus-visible:ring-white/15 transition-all duration-200;
+  }
+
+  .btn-primary {
+    @apply w-full bg-white text-black font-medium py-3 px-6 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-white/50;
+  }
+
+  .btn-ghost {
+    @apply text-white/60 hover:text-white hover:bg-white/5 px-3 py-2 rounded-lg transition-all duration-200 text-sm font-medium;
+  }
+
+  .message-enter {
+    animation: slide-up 0.3s ease-out;
+  }
+
+  .typing-dot {
+    @apply w-2 h-2 bg-white/40 rounded-full;
+    animation: typing-pulse 1.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  .typing-dot:nth-child(2) {
+    animation-delay: 0.2s;
+  }
+
+  .typing-dot:nth-child(3) {
+    animation-delay: 0.4s;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
