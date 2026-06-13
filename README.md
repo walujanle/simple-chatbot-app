@@ -11,6 +11,7 @@ A self-hosted, multi-provider AI chatbot built with React and Hono. Users bring 
 - Per-user provider credentials encrypted at rest with AES-256-GCM
 - Portable bcrypt password hashing with cost factor 12
 - Signed HttpOnly cookie sessions, exact-origin checks, and process-local rate limits
+- In-chat provider setup guidance when no active API credential is configured
 - Web search and reasoning disabled by default for every message
 - Estimated token-aware context selection and rolling AI-generated summaries
 - AI-generated first-message titles with a deterministic local fallback

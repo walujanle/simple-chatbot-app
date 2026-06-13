@@ -17,6 +17,8 @@ import type { AIProvider, ProviderConfig, ProviderConfigInput, ReasoningEffort }
 
 interface SettingsModalProps {
   onClose: () => void;
+  focusApiKey?: boolean;
+  onProviderStatusChange?: (ready: boolean) => void;
 }
 
 const PROVIDER_LABELS: Record<AIProvider, string> = {
@@ -71,10 +73,12 @@ function fromSaved(config: ProviderConfig): ProviderConfigInput {
   };
 }
 
-export function SettingsModal({ onClose }: SettingsModalProps) {
+export function SettingsModal({ onClose, focusApiKey = false, onProviderStatusChange }: SettingsModalProps) {
   const titleId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const apiKeyInputRef = useRef<HTMLInputElement>(null);
+  const apiKeyFocusedRef = useRef(false);
   const { updateUser, clearCredentialResetNotice } = useAuth();
   const [activeTab, setActiveTab] = useState<"profile" | "ai" | "security">("ai");
   const [username, setUsername] = useState("");
@@ -121,6 +125,12 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   useEffect(() => {
     void loadSettings();
   }, [loadSettings]);
+
+  useEffect(() => {
+    if (loading || !focusApiKey || activeTab !== "ai" || apiKeyFocusedRef.current) return;
+    apiKeyFocusedRef.current = true;
+    apiKeyInputRef.current?.focus();
+  }, [activeTab, focusApiKey, loading]);
 
   useEffect(() => {
     const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -201,6 +211,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
       ]);
       setProviderForms((current) => ({ ...current, [selectedProvider]: fromSaved(response.provider) }));
       await clearCredentialResetNotice(false);
+      onProviderStatusChange?.(true);
       setSuccess(`${PROVIDER_LABELS[selectedProvider]} saved and activated`);
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : "Failed to save AI settings");
@@ -227,9 +238,11 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     resetMessages();
     try {
       await api.deleteProvider(selectedProvider);
-      setSavedProviders((current) => current.filter((provider) => provider.provider !== selectedProvider));
+      const remainingProviders = savedProviders.filter((provider) => provider.provider !== selectedProvider);
+      setSavedProviders(remainingProviders);
       setProviderForms((current) => ({ ...current, [selectedProvider]: PROVIDER_DEFAULTS[selectedProvider] }));
       setApiKey("");
+      onProviderStatusChange?.(remainingProviders.some((provider) => provider.isActive));
       setSuccess("Stored credential removed");
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : "Failed to remove provider");
@@ -249,6 +262,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
       setProviderForms(PROVIDER_DEFAULTS);
       setApiKey("");
       await clearCredentialResetNotice(false);
+      onProviderStatusChange?.(false);
       setSuccess(
         response.deletedCount === 1
           ? "Deleted 1 stored credential"
@@ -433,6 +447,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
 
               <Field label={`API key${currentSaved ? ` (${currentSaved.maskedApiKey})` : ""}`}>
                 <input
+                  ref={apiKeyInputRef}
                   type="password"
                   autoComplete="off"
                   className="input-field"

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.3 - 13 June 2026
+
+### Added
+
+- **Guided API key setup in chat:** Detect when no active AI provider credential is configured, show an in-chat setup prompt, disable the unavailable composer, and open AI Provider settings with focus placed directly on the API key field.
+
 ## 0.1.2 - 13 June 2026
 
 ### Fixed

@@ -10,6 +10,8 @@ import { useChat } from "@/hooks/useChat";
 import { exportChatAsMarkdown } from "@/lib/export-chat";
 import type { Chat } from "@/types";
 
+type ProviderStatus = "loading" | "ready" | "missing" | "error";
+
 export function ChatLayout() {
   const { user, clearCredentialResetNotice } = useAuth();
   const [chats, setChats] = useState<Chat[]>([]);
@@ -17,6 +19,8 @@ export function ChatLayout() {
   const activeChatId = chatId || null;
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [focusProviderKey, setFocusProviderKey] = useState(false);
+  const [providerStatus, setProviderStatus] = useState<ProviderStatus>("loading");
   const [noticeError, setNoticeError] = useState<string | null>(null);
 
   const navigate = useNavigate();
@@ -52,9 +56,40 @@ export function ChatLayout() {
     }
   }, [setError]);
 
+  const loadProviderStatus = useCallback(async () => {
+    setProviderStatus("loading");
+    try {
+      const data = await api.getProviders();
+      if (!mountedRef.current) return;
+      const hasActiveProvider = data.providers.some((provider) => provider.isActive && provider.hasApiKey);
+      setProviderStatus(hasActiveProvider ? "ready" : "missing");
+    } catch {
+      if (mountedRef.current) setProviderStatus("error");
+    }
+  }, []);
+
   useEffect(() => {
-    loadChats();
-  }, [loadChats]);
+    void Promise.all([loadChats(), loadProviderStatus()]);
+  }, [loadChats, loadProviderStatus]);
+
+  const openSettings = useCallback((focusApiKey = false) => {
+    setFocusProviderKey(focusApiKey);
+    setSettingsOpen(true);
+  }, []);
+
+  const closeSettings = useCallback(() => {
+    setSettingsOpen(false);
+    setFocusProviderKey(false);
+    void loadProviderStatus();
+  }, [loadProviderStatus]);
+
+  const handleProviderStatusChange = useCallback(
+    (ready: boolean) => {
+      setProviderStatus(ready ? "ready" : "missing");
+      if (ready) setError(null);
+    },
+    [setError],
+  );
 
   const handleNewChat = useCallback(async () => {
     api.cancelActiveStream();
@@ -114,6 +149,10 @@ export function ChatLayout() {
 
   const handleSendMessage = useCallback(
     async (content: string, options?: { webSearch?: boolean; thinking?: boolean }) => {
+      if (providerStatus === "missing") {
+        openSettings(true);
+        return;
+      }
       if (!activeChatId) {
         api.cancelActiveStream();
         try {
@@ -132,7 +171,7 @@ export function ChatLayout() {
         void sendMessage(content, options).then(loadChats);
       }
     },
-    [activeChatId, loadChats, sendMessage, setActiveChat, setError],
+    [activeChatId, loadChats, openSettings, providerStatus, sendMessage, setActiveChat, setError],
   );
 
   const dismissCredentialResetNotice = useCallback(async () => {
@@ -155,7 +194,7 @@ export function ChatLayout() {
         onRenameChat={handleRenameChat}
         isOpen={sidebarOpen}
         onToggle={() => setSidebarOpen((v) => !v)}
-        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenSettings={() => openSettings(false)}
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -256,7 +295,7 @@ export function ChatLayout() {
               </p>
               <button
                 type="button"
-                onClick={() => setSettingsOpen(true)}
+                onClick={() => openSettings(true)}
                 className="rounded-lg bg-amber-100 px-3 py-1.5 font-medium text-amber-950 hover:bg-white"
               >
                 Configure credentials
@@ -278,6 +317,8 @@ export function ChatLayout() {
           isHistoryLoading={isHistoryLoading}
           chatId={activeChatId}
           error={error}
+          needsProviderSetup={providerStatus === "missing"}
+          onConfigureProvider={() => openSettings(true)}
         />
 
         <MessageInput
@@ -285,9 +326,17 @@ export function ChatLayout() {
           isLoading={isLoading || isHistoryLoading}
           isHistoryLoading={isHistoryLoading}
           onCancel={() => api.cancelActiveStream()}
+          providerSetupRequired={providerStatus === "missing"}
+          providerStatusLoading={providerStatus === "loading"}
         />
       </div>
-      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+      {settingsOpen && (
+        <SettingsModal
+          onClose={closeSettings}
+          focusApiKey={focusProviderKey}
+          onProviderStatusChange={handleProviderStatusChange}
+        />
+      )}
     </div>
   );
 }

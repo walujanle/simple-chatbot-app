@@ -5,19 +5,29 @@ interface MessageInputProps {
   isLoading: boolean;
   isHistoryLoading?: boolean;
   onCancel: () => void;
+  providerSetupRequired?: boolean;
+  providerStatusLoading?: boolean;
 }
 
-export function MessageInput({ onSend, isLoading, isHistoryLoading = false, onCancel }: MessageInputProps) {
+export function MessageInput({
+  onSend,
+  isLoading,
+  isHistoryLoading = false,
+  onCancel,
+  providerSetupRequired = false,
+  providerStatusLoading = false,
+}: MessageInputProps) {
   const [input, setInput] = useState("");
   const [webSearch, setWebSearch] = useState(false);
   const [thinking, setThinking] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const inputBlocked = providerSetupRequired || providerStatusLoading;
 
   useEffect(() => {
-    if (!isLoading && textareaRef.current) {
+    if (!isLoading && !inputBlocked && textareaRef.current) {
       textareaRef.current.focus();
     }
-  }, [isLoading]);
+  }, [inputBlocked, isLoading]);
 
   const adjustHeight = useCallback(() => {
     const textarea = textareaRef.current;
@@ -34,13 +44,13 @@ export function MessageInput({ onSend, isLoading, isHistoryLoading = false, onCa
 
   const handleSend = useCallback(() => {
     const trimmed = input.trim();
-    if (!trimmed || isLoading) return;
+    if (!trimmed || isLoading || inputBlocked) return;
     onSend(trimmed, { webSearch, thinking });
     setInput("");
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
-  }, [input, isLoading, onSend, webSearch, thinking]);
+  }, [input, inputBlocked, isLoading, onSend, webSearch, thinking]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -71,7 +81,7 @@ export function MessageInput({ onSend, isLoading, isHistoryLoading = false, onCa
           <button
             type="button"
             onClick={toggleWebSearch}
-            disabled={isLoading}
+            disabled={isLoading || inputBlocked}
             aria-pressed={webSearch}
             className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-medium transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-50 ${
               webSearch
@@ -99,7 +109,7 @@ export function MessageInput({ onSend, isLoading, isHistoryLoading = false, onCa
           <button
             type="button"
             onClick={toggleThinking}
-            disabled={isLoading}
+            disabled={isLoading || inputBlocked}
             aria-pressed={thinking}
             className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-medium transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-50 ${
               thinking
@@ -132,17 +142,23 @@ export function MessageInput({ onSend, isLoading, isHistoryLoading = false, onCa
             onChange={handleChange}
             onKeyDown={handleKeyDown}
             placeholder={
-              isHistoryLoading ? "Loading conversation history..." : "Type your message... (Shift+Enter for new line)"
+              providerSetupRequired
+                ? "Configure an AI provider to start chatting"
+                : providerStatusLoading
+                  ? "Checking AI provider configuration..."
+                  : isHistoryLoading
+                    ? "Loading conversation history..."
+                    : "Type your message... (Shift+Enter for new line)"
             }
             rows={1}
             maxLength={32000}
-            disabled={isLoading}
+            disabled={isLoading || inputBlocked}
             className="max-h-50 min-w-0 flex-1 resize-none border-none bg-transparent px-2 py-2 text-sm leading-relaxed text-white placeholder:text-white/30 disabled:opacity-50 sm:px-3 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0"
           />
 
           <button
             onClick={isLoading && !isHistoryLoading ? onCancel : handleSend}
-            disabled={isHistoryLoading || (!isLoading && !input.trim())}
+            disabled={isHistoryLoading || inputBlocked || (!isLoading && !input.trim())}
             type="button"
             aria-label={
               isHistoryLoading ? "Loading conversation history" : isLoading ? "Stop response" : "Send message"
