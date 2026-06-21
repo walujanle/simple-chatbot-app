@@ -3,9 +3,10 @@ import { z } from "zod";
 import db from "@/db.js";
 import { type AppEnv, authMiddleware } from "@/middleware/auth.js";
 import { rateLimit } from "@/middleware/rate-limit.js";
-import { type AIProvider, createProviderAdapter } from "@/providers/index.js";
+import { createProviderAdapter } from "@/providers/index.js";
 import {
   acknowledgeCredentialReset,
+  activateProviderConfig,
   deleteAllProviderConfigs,
   deleteProviderConfig,
   getProviderCredential,
@@ -21,7 +22,10 @@ providers.use("*", rateLimit(120, 60_000));
 const providerSchema = z.enum(["openai-compatible", "anthropic", "gemini"]);
 const configSchema = z
   .object({
+    name: z.string().trim().min(1).max(100),
+    provider: providerSchema,
     apiKey: z.string().trim().min(8).max(512).optional(),
+    reuseApiKeyFromConfigId: z.string().uuid().optional().nullable(),
     baseUrl: z.string().trim().url().max(2048).nullable(),
     apiVersion: z
       .string()
@@ -64,14 +68,13 @@ providers.post("/credential-reset/acknowledge", async (c) => {
   return c.json({ success: true });
 });
 
-providers.put("/:provider", rateLimit(20, 60_000), async (c) => {
-  const providerResult = providerSchema.safeParse(c.req.param("provider"));
+providers.post("/", rateLimit(20, 60_000), async (c) => {
   const configResult = configSchema.safeParse(await c.req.json().catch(() => null));
-  if (!providerResult.success || !configResult.success) {
+  if (!configResult.success) {
     return c.json(
       {
         error: {
-          message: configResult.error?.issues[0]?.message || "Invalid provider configuration",
+          message: configResult.error.issues[0]?.message || "Invalid configuration",
           code: "VALIDATION_ERROR",
         },
       },
@@ -79,13 +82,14 @@ providers.put("/:provider", rateLimit(20, 60_000), async (c) => {
     );
   }
 
-  if (providerResult.data === "openai-compatible" && !configResult.data.baseUrl) {
+  const { data } = configResult;
+  if (data.provider === "openai-compatible" && !data.baseUrl) {
     return c.json({ error: { message: "Base URL is required", code: "VALIDATION_ERROR" } }, 400);
   }
 
-  if (configResult.data.baseUrl) {
+  if (data.baseUrl) {
     try {
-      await validateExternalUrl(configResult.data.baseUrl);
+      await validateExternalUrl(data.baseUrl);
     } catch (error) {
       return c.json(
         { error: { message: error instanceof Error ? error.message : "Invalid endpoint", code: "INVALID_ENDPOINT" } },
@@ -94,29 +98,31 @@ providers.put("/:provider", rateLimit(20, 60_000), async (c) => {
     }
   }
 
-  if (providerResult.data !== "gemini" && configResult.data.apiVersion) {
+  if (data.provider !== "gemini" && data.apiVersion) {
     return c.json({ error: { message: "API version is only configurable for Gemini", code: "VALIDATION_ERROR" } }, 400);
   }
 
   try {
     const saved = await saveProviderConfig(c.get("session").userId, {
-      provider: providerResult.data,
-      apiKey: configResult.data.apiKey,
-      baseUrl: configResult.data.baseUrl,
-      apiVersion: providerResult.data === "gemini" ? configResult.data.apiVersion : null,
-      model: configResult.data.model,
-      contextWindow: configResult.data.contextWindow,
-      maxOutputTokens: configResult.data.maxOutputTokens,
-      temperature: configResult.data.temperature,
-      reasoningEffort: configResult.data.reasoningEffort,
-      isActive: configResult.data.isActive,
+      name: data.name,
+      provider: data.provider,
+      apiKey: data.apiKey,
+      reuseApiKeyFromConfigId: data.reuseApiKeyFromConfigId || undefined,
+      baseUrl: data.baseUrl,
+      apiVersion: data.provider === "gemini" ? data.apiVersion : null,
+      model: data.model,
+      contextWindow: data.contextWindow,
+      maxOutputTokens: data.maxOutputTokens,
+      temperature: data.temperature,
+      reasoningEffort: data.reasoningEffort,
+      isActive: data.isActive,
     });
     return c.json({ provider: saved });
   } catch (error) {
     return c.json(
       {
         error: {
-          message: error instanceof Error ? error.message : "Unable to save provider",
+          message: error instanceof Error ? error.message : "Unable to save configuration",
           code: "SAVE_PROVIDER_FAILED",
         },
       },
@@ -125,14 +131,76 @@ providers.put("/:provider", rateLimit(20, 60_000), async (c) => {
   }
 });
 
-providers.post("/:provider/test", rateLimit(10, 60_000), async (c) => {
-  const provider = providerSchema.safeParse(c.req.param("provider"));
-  if (!provider.success) {
-    return c.json({ error: { message: "Unknown provider", code: "VALIDATION_ERROR" } }, 400);
+providers.put("/:id", rateLimit(20, 60_000), async (c) => {
+  const id = c.req.param("id");
+  const configResult = configSchema.safeParse(await c.req.json().catch(() => null));
+  if (!configResult.success) {
+    return c.json(
+      {
+        error: {
+          message: configResult.error.issues[0]?.message || "Invalid configuration",
+          code: "VALIDATION_ERROR",
+        },
+      },
+      400,
+    );
   }
-  const credential = await getProviderCredential(c.get("session").userId, provider.data);
+
+  const { data } = configResult;
+  if (data.provider === "openai-compatible" && !data.baseUrl) {
+    return c.json({ error: { message: "Base URL is required", code: "VALIDATION_ERROR" } }, 400);
+  }
+
+  if (data.baseUrl) {
+    try {
+      await validateExternalUrl(data.baseUrl);
+    } catch (error) {
+      return c.json(
+        { error: { message: error instanceof Error ? error.message : "Invalid endpoint", code: "INVALID_ENDPOINT" } },
+        400,
+      );
+    }
+  }
+
+  if (data.provider !== "gemini" && data.apiVersion) {
+    return c.json({ error: { message: "API version is only configurable for Gemini", code: "VALIDATION_ERROR" } }, 400);
+  }
+
+  try {
+    const saved = await saveProviderConfig(c.get("session").userId, {
+      id,
+      name: data.name,
+      provider: data.provider,
+      apiKey: data.apiKey,
+      reuseApiKeyFromConfigId: data.reuseApiKeyFromConfigId || undefined,
+      baseUrl: data.baseUrl,
+      apiVersion: data.provider === "gemini" ? data.apiVersion : null,
+      model: data.model,
+      contextWindow: data.contextWindow,
+      maxOutputTokens: data.maxOutputTokens,
+      temperature: data.temperature,
+      reasoningEffort: data.reasoningEffort,
+      isActive: data.isActive,
+    });
+    return c.json({ provider: saved });
+  } catch (error) {
+    return c.json(
+      {
+        error: {
+          message: error instanceof Error ? error.message : "Unable to save configuration",
+          code: "SAVE_PROVIDER_FAILED",
+        },
+      },
+      400,
+    );
+  }
+});
+
+providers.post("/:id/test", rateLimit(10, 60_000), async (c) => {
+  const id = c.req.param("id");
+  const credential = await getProviderCredential(c.get("session").userId, id);
   if (!credential) {
-    return c.json({ error: { message: "Save the provider first", code: "PROVIDER_NOT_CONFIGURED" } }, 400);
+    return c.json({ error: { message: "Configuration not found", code: "PROVIDER_NOT_CONFIGURED" } }, 400);
   }
   try {
     await createProviderAdapter(credential).validate(AbortSignal.timeout(20_000));
@@ -150,12 +218,27 @@ providers.post("/:provider/test", rateLimit(10, 60_000), async (c) => {
   }
 });
 
-providers.delete("/:provider", async (c) => {
-  const provider = providerSchema.safeParse(c.req.param("provider"));
-  if (!provider.success) {
-    return c.json({ error: { message: "Unknown provider", code: "VALIDATION_ERROR" } }, 400);
+providers.post("/:id/activate", async (c) => {
+  const id = c.req.param("id");
+  try {
+    const provider = await activateProviderConfig(c.get("session").userId, id);
+    return c.json({ success: true, provider });
+  } catch (error) {
+    return c.json(
+      {
+        error: {
+          message: error instanceof Error ? error.message : "Unable to activate configuration",
+          code: "ACTIVATE_PROVIDER_FAILED",
+        },
+      },
+      400,
+    );
   }
-  await deleteProviderConfig(c.get("session").userId, provider.data as AIProvider);
+});
+
+providers.delete("/:id", async (c) => {
+  const id = c.req.param("id");
+  await deleteProviderConfig(c.get("session").userId, id);
   return c.json({ success: true });
 });
 

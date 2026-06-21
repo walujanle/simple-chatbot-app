@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "@/api/client";
 import { ChatArea } from "@/components/ChatArea";
@@ -8,7 +8,7 @@ import { Sidebar } from "@/components/Sidebar";
 import { useAuth } from "@/context/AuthContext";
 import { useChat } from "@/hooks/useChat";
 import { exportChatAsMarkdown } from "@/lib/export-chat";
-import type { Chat } from "@/types";
+import type { Chat, ProviderConfig } from "@/types";
 
 type ProviderStatus = "loading" | "ready" | "missing" | "error";
 
@@ -21,6 +21,7 @@ export function ChatLayout() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [focusProviderKey, setFocusProviderKey] = useState(false);
   const [providerStatus, setProviderStatus] = useState<ProviderStatus>("loading");
+  const [providerConfigs, setProviderConfigs] = useState<ProviderConfig[]>([]);
   const [noticeError, setNoticeError] = useState<string | null>(null);
 
   const navigate = useNavigate();
@@ -61,6 +62,7 @@ export function ChatLayout() {
     try {
       const data = await api.getProviders();
       if (!mountedRef.current) return;
+      setProviderConfigs(data.providers);
       const hasActiveProvider = data.providers.some((provider) => provider.isActive && provider.hasApiKey);
       setProviderStatus(hasActiveProvider ? "ready" : "missing");
     } catch {
@@ -220,6 +222,32 @@ export function ChatLayout() {
           <div className="flex-1 min-w-0">
             <h1 className="text-sm font-medium text-white truncate">{activeChat?.title || "Simple Chatbot"}</h1>
           </div>
+
+          {providerConfigs.length > 0 && (
+            <div className="mx-2 max-w-[12rem] sm:max-w-[16rem] shrink-0">
+              <select
+                value={providerConfigs.find((p) => p.isActive)?.id || ""}
+                onChange={async (e) => {
+                  const targetId = e.target.value;
+                  if (!targetId) return;
+                  try {
+                    await api.activateProvider(targetId);
+                    await loadProviderStatus();
+                  } catch {
+                    setError("Failed to switch AI model");
+                  }
+                }}
+                className="w-full text-xs font-semibold rounded-lg bg-white/5 border border-white/10 px-2 py-1.5 text-white/80 focus:border-white focus:outline-none hover:bg-white/10 transition-all cursor-pointer truncate"
+                aria-label="Switch AI model"
+              >
+                {providerConfigs.map((config) => (
+                  <option key={config.id} value={config.id} className="bg-[#151515] text-white">
+                    {config.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {activeChatId && (
             <>

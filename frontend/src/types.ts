@@ -73,6 +73,8 @@ export type AIProvider = "openai-compatible" | "anthropic" | "gemini";
 export type ReasoningEffort = "off" | "low" | "medium" | "high";
 
 export interface ProviderConfig {
+  id: string;
+  name: string;
   provider: AIProvider;
   baseUrl: string | null;
   apiVersion: string | null;
@@ -88,7 +90,10 @@ export interface ProviderConfig {
 }
 
 export interface ProviderConfigInput {
+  name: string;
+  provider: AIProvider;
   apiKey?: string;
+  reuseApiKeyFromConfigId?: string | null;
   baseUrl: string | null;
   apiVersion: string | null;
   model: string;

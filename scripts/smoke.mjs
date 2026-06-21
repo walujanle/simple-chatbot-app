@@ -156,9 +156,11 @@ try {
   });
   assert.equal(createMessage.status, 200);
 
-  const saveProvider = await request("/api/providers/anthropic", {
-    method: "PUT",
+  const saveProvider = await request("/api/providers", {
+    method: "POST",
     body: JSON.stringify({
+      name: "Anthropic Test Model",
+      provider: "anthropic",
       apiKey: "test-api-key-not-real",
       baseUrl: null,
       apiVersion: null,

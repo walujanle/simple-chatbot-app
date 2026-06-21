@@ -1,4 +1,4 @@
-import type { AIProvider, Chat, Message, ProviderConfig, ProviderConfigInput, StreamChunk, User } from "@/types";
+import type { Chat, Message, ProviderConfig, ProviderConfigInput, StreamChunk, User } from "@/types";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/+$/, "");
 
@@ -104,16 +104,23 @@ class ApiClient {
     return this.request("/api/providers", {}, "providers");
   }
 
-  saveProvider(provider: AIProvider, input: ProviderConfigInput): Promise<{ provider: ProviderConfig }> {
-    return this.request(`/api/providers/${provider}`, { method: "PUT", body: JSON.stringify(input) });
+  saveProvider(id: string | null, input: ProviderConfigInput): Promise<{ provider: ProviderConfig }> {
+    if (id) {
+      return this.request(`/api/providers/${id}`, { method: "PUT", body: JSON.stringify(input) });
+    }
+    return this.request("/api/providers", { method: "POST", body: JSON.stringify(input) });
   }
 
-  testProvider(provider: AIProvider): Promise<{ success: boolean }> {
-    return this.request(`/api/providers/${provider}/test`, { method: "POST" });
+  testProvider(id: string): Promise<{ success: boolean }> {
+    return this.request(`/api/providers/${id}/test`, { method: "POST" });
   }
 
-  deleteProvider(provider: AIProvider): Promise<{ success: boolean }> {
-    return this.request(`/api/providers/${provider}`, { method: "DELETE" });
+  activateProvider(id: string): Promise<{ success: boolean; provider: ProviderConfig }> {
+    return this.request(`/api/providers/${id}/activate`, { method: "POST" });
+  }
+
+  deleteProvider(id: string): Promise<{ success: boolean }> {
+    return this.request(`/api/providers/${id}`, { method: "DELETE" });
   }
 
   deleteAllProviders(): Promise<{ success: boolean; deletedCount: number }> {

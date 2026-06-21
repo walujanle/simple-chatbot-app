@@ -76,7 +76,7 @@ These limits reduce memory and token use but do not provide exact billing predic
 - `chats`: ownership, title, rolling summary, and summary checkpoint
 - `messages`: durable user and assistant content plus completion status
 - `message_receipts`: provider/model metadata, endpoint host, latency, candidate search sources, reasoning settings, reported token usage, and context estimates
-- `provider_configs`: one encrypted configuration per user and protocol
+- `provider_configs`: multiple encrypted configurations per user, each identified by a unique ID and custom name
 - `app_metadata`: non-secret encryption-key identity marker
 
 Chat history and optional receipts are loaded in one query using a derived newest-message set plus a `LEFT JOIN`; provider credentials are never joined into chat reads. Kysely supplies parameterized queries for SQLite, PostgreSQL, MySQL, and MariaDB. Startup runs versioned migrations under Kysely's database migration lock.

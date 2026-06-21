@@ -29,7 +29,7 @@ This design is encrypted at rest for provider keys, not end-to-end encrypted or 
 - Provider keys use AES-256-GCM authenticated encryption with a fresh nonce.
 - API responses return only `Configured`; keys are not returned to the browser or placed in browser storage.
 - A non-secret encryption identity marker detects key changes at startup.
-- When the key identity changes, or a credential cannot be decrypted, affected provider rows are deleted, the active provider is cleared, and the user receives a persistent reset notification.
+- When the key identity changes, or a credential cannot be decrypted, affected provider configuration rows are deleted. If no active configurations remain, the active provider state is cleared and the user receives a persistent reset notification.
 - The same secret is rejected for JWT signing and credential encryption in production.
 
 The backend process can decrypt credentials and an operator with runtime or secret access can do the same. Database encryption does not protect against a compromised backend host.

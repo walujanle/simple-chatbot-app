@@ -38,7 +38,9 @@ export interface MessagesTable {
 }
 
 export interface ProviderConfigsTable {
+  id: string;
   user_id: number;
+  name: string;
   provider: AIProvider;
   api_key_encrypted: string;
   base_url: string | null;
