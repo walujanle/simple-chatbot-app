@@ -167,6 +167,25 @@ export async function saveMessageReceipt(
     .execute();
 }
 
+export interface MessageProviderInfo {
+  provider: AIProvider;
+  model: string;
+}
+
+export async function getReceiptsForMessages(messageIds: number[]): Promise<Map<number, MessageProviderInfo>> {
+  if (messageIds.length === 0) return new Map();
+  const rows = await db
+    .selectFrom("message_receipts")
+    .select(["message_id", "provider", "model"])
+    .where("message_id", "in", messageIds)
+    .execute();
+  const map = new Map<number, MessageProviderInfo>();
+  for (const row of rows) {
+    map.set(row.message_id, { provider: row.provider, model: row.model });
+  }
+  return map;
+}
+
 export function getEndpointHost(baseUrl: string | null, provider: AIProvider): string {
   if (!baseUrl) {
     if (provider === "anthropic") return "api.anthropic.com";

@@ -41,12 +41,13 @@ Frontend and backend source imports use `@/` for their respective `src` director
 2. The backend validates the signed cookie, checks the database-backed session version, and verifies chat ownership.
 3. The user message is committed before the provider call. This preserves the prompt even if search or generation fails.
 4. When requested, web search produces at most eight deduplicated results. Up to six candidate sources are placed in model context and stored in the receipt.
-5. The backend builds system context, including the current UTC time, the user's optional system prompt, and untrusted research evidence.
-6. Context selection uses a conservative character-based token estimate. It reserves configured output space, retains recent messages, and summarizes older unsummarized messages only when needed.
-7. The selected provider adapter normalizes streamed content, provider-emitted reasoning text when available, and usage metadata.
-8. A completed or partial assistant response and its receipt are committed in one database transaction. Partial output is stored with `interrupted` status; a failure before any output leaves only the user message.
-9. On the first turn, a separate completion can replace the local fallback title with an AI-generated title. Failure leaves the fallback unchanged.
-10. SSE reports persisted identifiers and completion metadata. Reloading the chat reads the same durable messages and receipts, including interrupted responses.
+5. The backend builds system context, including the active model identity (`"You are currently responding as {model} ({provider})"`), the current UTC time, the user's optional system prompt, and untrusted research evidence.
+6. Before context selection, assistant messages from prior provider/model configurations are annotated with their origin metadata from `message_receipts`. This gives the active model awareness when previous responses came from a different AI. Annotations are in-memory only and do not modify stored messages.
+7. Context selection uses a conservative character-based token estimate. It reserves configured output space, retains recent messages, and summarizes older unsummarized messages only when needed.
+8. The selected provider adapter normalizes streamed content, provider-emitted reasoning text when available, and usage metadata.
+9. A completed or partial assistant response and its receipt are committed in one database transaction. Partial output is stored with `interrupted` status; a failure before any output leaves only the user message.
+10. On the first turn, a separate completion can replace the local fallback title with an AI-generated title. Failure leaves the fallback unchanged.
+11. SSE reports persisted identifiers and completion metadata. Reloading the chat reads the same durable messages and receipts, including interrupted responses.
 
 ## Provider Contract
 
