@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.3 - 21 June 2026
+
+### Fixed
+
+- **CORS preflight rejection for X-CSRF-Token**: Allow the `X-CSRF-Token` header in the CORS preflight response headers (`Access-Control-Allow-Headers`) to prevent browser blocks on cross-origin requests from the frontend to the backend.
+
 ## 0.2.2 - 21 June 2026
 
 ### Added

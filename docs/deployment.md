@@ -99,7 +99,7 @@ Ephemeral platforms must use a remote database. A non-empty `DATABASE_URL` alone
 
 ## Cookies And Origins
 
-All browser requests include credentials. Every state-changing API request must carry an `Origin` exactly present in `FRONTEND_URL`; wildcards are not supported.
+All browser requests include credentials. Every state-changing API request must carry an `Origin` exactly present in `FRONTEND_URL`; wildcards are not supported. The backend CORS configuration explicitly allows the `Content-Type` and `X-CSRF-Token` request headers during preflight checks.
 
 The automatic production default for any public frontend origin is `Secure` plus `SameSite=None`. For a same-site frontend/API deployment, explicitly use the stricter mode when compatible:
 

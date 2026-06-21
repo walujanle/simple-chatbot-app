@@ -48,7 +48,7 @@ export function createApp(): Hono<RootEnv> {
     cors({
       origin: (origin) => (allowedOriginSet.has(origin) ? origin : null),
       credentials: true,
-      allowHeaders: ["Content-Type"],
+      allowHeaders: ["Content-Type", "X-CSRF-Token"],
       allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
       maxAge: 86400,
     }),
