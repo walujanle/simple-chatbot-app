@@ -75,14 +75,32 @@ child.stderr.on("data", (chunk) => {
 });
 
 const baseUrl = `http://127.0.0.1:${port}`;
-let cookie = "";
+let sessionCookie = "";
+let csrfToken = "";
+
+function extractCookies(response) {
+  const allCookies = response.headers.getSetCookie?.() || [];
+  for (const raw of allCookies) {
+    const segment = raw.split(";", 1)[0] || "";
+    if (segment.startsWith("chatbot_session=")) sessionCookie = segment;
+    if (segment.startsWith("chatbot_csrf=")) {
+      csrfToken = segment.split("=", 2)[1] || "";
+    }
+  }
+}
 
 async function request(pathname, options = {}) {
   const headers = new Headers(options.headers);
   headers.set("Origin", options.origin || frontendOrigin);
   if (options.body) headers.set("Content-Type", "application/json");
-  if (cookie) headers.set("Cookie", cookie);
-  return fetch(`${baseUrl}${pathname}`, { ...options, headers });
+  if (sessionCookie) headers.set("Cookie", sessionCookie);
+  const method = (options.method || "GET").toUpperCase();
+  if (["POST", "PUT", "PATCH", "DELETE"].includes(method) && csrfToken) {
+    headers.set("X-CSRF-Token", csrfToken);
+  }
+  const response = await fetch(`${baseUrl}${pathname}`, { ...options, headers });
+  extractCookies(response);
+  return response;
 }
 
 async function waitForServer() {
@@ -111,6 +129,16 @@ try {
   assert.equal(authConfig.status, 200);
   assert.equal((await authConfig.json()).registrationEnabled, true);
 
+  const unauthChats = await fetch(`${baseUrl}/api/chats`, {
+    headers: { Origin: frontendOrigin },
+  });
+  assert.equal(unauthChats.status, 401, "Unauthenticated GET /api/chats must return 401");
+
+  const unauthProviders = await fetch(`${baseUrl}/api/providers`, {
+    headers: { Origin: frontendOrigin },
+  });
+  assert.equal(unauthProviders.status, 401, "Unauthenticated GET /api/providers must return 401");
+
   const oversizedPassword = await request("/api/auth/register", {
     method: "POST",
     body: JSON.stringify({ username: "oversized_password", password: "a".repeat(73) }),
@@ -122,16 +150,32 @@ try {
     body: JSON.stringify({ username, password: "correct-horse-battery-staple" }),
   });
   assert.equal(registration.status, 201);
-  const setCookie = registration.headers.get("set-cookie") || "";
-  assert.match(setCookie, /HttpOnly/i);
-  assert.match(setCookie, /SameSite=Lax/i);
-  assert.doesNotMatch(setCookie, /;\s*Secure/i);
-  cookie = setCookie.split(";", 1)[0] || "";
-  assert.ok(cookie.startsWith("chatbot_session="));
+  assert.ok(sessionCookie.startsWith("chatbot_session="), "Session cookie must be set on register");
+  assert.ok(csrfToken, "CSRF cookie must be set on register");
+
+  const setCookieHeader = registration.headers.getSetCookie?.() || [];
+  const sessionSetCookie = setCookieHeader.find((h) => h.startsWith("chatbot_session=")) || "";
+  const csrfSetCookie = setCookieHeader.find((h) => h.startsWith("chatbot_csrf=")) || "";
+  assert.match(sessionSetCookie, /HttpOnly/i, "Session cookie must be HttpOnly");
+  assert.match(sessionSetCookie, /SameSite=Lax/i);
+  assert.doesNotMatch(sessionSetCookie, /;\s*Secure/i);
+  assert.doesNotMatch(csrfSetCookie, /HttpOnly/i, "CSRF cookie must NOT be HttpOnly");
+
+  const noCsrfPost = await fetch(`${baseUrl}/api/chats`, {
+    method: "POST",
+    headers: {
+      Origin: frontendOrigin,
+      "Content-Type": "application/json",
+      Cookie: sessionCookie,
+    },
+    body: JSON.stringify({ title: "Should fail CSRF" }),
+  });
+  assert.equal(noCsrfPost.status, 403, "POST without X-CSRF-Token must return 403");
+  assert.equal((await noCsrfPost.json()).error.code, "CSRF_VALIDATION_FAILED");
 
   const missingOrigin = await fetch(`${baseUrl}/api/auth/logout`, {
     method: "POST",
-    headers: { Cookie: cookie },
+    headers: { Cookie: sessionCookie, "X-CSRF-Token": csrfToken },
   });
   assert.equal(missingOrigin.status, 403);
 

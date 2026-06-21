@@ -1,11 +1,17 @@
 import { Hono } from "hono";
-import { deleteCookie, setCookie } from "hono/cookie";
-import { sign } from "hono/jwt";
 import { z } from "zod";
 import { config } from "@/config.js";
 import { insertUser } from "@/database/write.js";
 import db, { nowIso } from "@/db.js";
-import { type AppEnv, authMiddleware, SESSION_COOKIE } from "@/middleware/auth.js";
+import {
+  type AppEnv,
+  authMiddleware,
+  clearSessionCookies,
+  createSessionToken,
+  generateCsrfToken,
+  setCsrfCookie,
+  setSessionCookie,
+} from "@/middleware/auth.js";
 import { rateLimit } from "@/middleware/rate-limit.js";
 import { exceedsBcryptInputLimit, hashPassword, verifyPassword } from "@/utils/password.js";
 
@@ -41,26 +47,62 @@ const changePasswordSchema = z.object({
   newPassword: newPasswordSchema,
 });
 
-function setSessionCookie(c: Parameters<typeof setCookie>[0], token: string): void {
-  setCookie(c, SESSION_COOKIE, token, {
-    httpOnly: true,
-    secure: config.COOKIE_SECURE,
-    sameSite: config.COOKIE_SAME_SITE,
-    path: "/",
-    maxAge: config.SESSION_TTL_HOURS * 60 * 60,
-  });
+interface LoginAttemptEntry {
+  failures: number;
+  resetAt: number;
+}
+
+const loginAttemptsByUsername = new Map<string, LoginAttemptEntry>();
+const LOGIN_ATTEMPT_WINDOW_MS = 15 * 60_000;
+const MAX_LOGIN_FAILURES_PER_USERNAME = 5;
+const MAX_LOGIN_ATTEMPT_ENTRIES = 10_000;
+
+const loginAttemptCleanupTimer = setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of loginAttemptsByUsername) {
+    if (entry.resetAt <= now) loginAttemptsByUsername.delete(key);
+  }
+}, 60_000);
+loginAttemptCleanupTimer.unref();
+
+function checkUsernameRateLimit(normalizedUsername: string): boolean {
+  const now = Date.now();
+  const entry = loginAttemptsByUsername.get(normalizedUsername);
+  if (!entry || entry.resetAt <= now) return true;
+  return entry.failures < MAX_LOGIN_FAILURES_PER_USERNAME;
+}
+
+function recordLoginFailure(normalizedUsername: string): void {
+  const now = Date.now();
+  let entry = loginAttemptsByUsername.get(normalizedUsername);
+  if (!entry || entry.resetAt <= now) {
+    if (loginAttemptsByUsername.size >= MAX_LOGIN_ATTEMPT_ENTRIES) {
+      const oldest = loginAttemptsByUsername.keys().next().value as string | undefined;
+      if (oldest) loginAttemptsByUsername.delete(oldest);
+    }
+    entry = { failures: 0, resetAt: now + LOGIN_ATTEMPT_WINDOW_MS };
+    loginAttemptsByUsername.set(normalizedUsername, entry);
+  }
+  entry.failures += 1;
+}
+
+function clearLoginFailures(normalizedUsername: string): void {
+  loginAttemptsByUsername.delete(normalizedUsername);
+}
+
+async function issueSession(
+  c: Parameters<typeof setSessionCookie>[0],
+  userId: number | bigint,
+  username: string,
+  sessionVersion: number,
+): Promise<void> {
+  const csrfToken = generateCsrfToken();
+  const token = await createSessionToken(userId, username, sessionVersion, csrfToken);
+  setSessionCookie(c, token);
+  setCsrfCookie(c, csrfToken);
 }
 
 auth.get("/config", (c) => c.json({ registrationEnabled: config.REGISTRATION_ENABLED }));
-
-async function createSessionToken(userId: number | bigint, username: string, sessionVersion: number): Promise<string> {
-  const iat = Math.floor(Date.now() / 1000);
-  return sign(
-    { userId: Number(userId), username, sessionVersion, iat, exp: iat + config.SESSION_TTL_HOURS * 60 * 60 },
-    config.JWT_SECRET,
-    "HS256",
-  );
-}
 
 auth.post("/register", rateLimit(5, 60_000), async (c) => {
   if (!config.REGISTRATION_ENABLED) {
@@ -98,7 +140,7 @@ auth.post("/register", rateLimit(5, 60_000), async (c) => {
       active_provider: null,
       created_at: nowIso(),
     });
-    setSessionCookie(c, await createSessionToken(userId, parsed.data.username, 0));
+    await issueSession(c, userId, parsed.data.username, 0);
     return c.json(
       {
         user: {
@@ -120,15 +162,27 @@ auth.post("/login", rateLimit(10, 60_000), async (c) => {
     return c.json({ error: { message: "Username and password are required", code: "VALIDATION_ERROR" } }, 400);
   }
 
+  const normalizedUsername = parsed.data.username.toLowerCase();
+
+  if (!checkUsernameRateLimit(normalizedUsername)) {
+    return c.json(
+      { error: { message: "Too many failed login attempts. Try again later.", code: "LOGIN_RATE_LIMITED" } },
+      429,
+    );
+  }
+
   const user = await db
     .selectFrom("users")
     .select(["id", "username", "password", "session_version", "credential_reset_required"])
-    .where("username_normalized", "=", parsed.data.username.toLowerCase())
+    .where("username_normalized", "=", normalizedUsername)
     .executeTakeFirst();
   const passwordResult = user ? await verifyPassword(user.password, parsed.data.password) : null;
   if (!user || !passwordResult?.valid) {
+    recordLoginFailure(normalizedUsername);
     return c.json({ error: { message: "Invalid username or password", code: "INVALID_CREDENTIALS" } }, 401);
   }
+
+  clearLoginFailures(normalizedUsername);
 
   if (passwordResult.needsRehash) {
     await db
@@ -138,7 +192,7 @@ auth.post("/login", rateLimit(10, 60_000), async (c) => {
       .execute();
   }
 
-  setSessionCookie(c, await createSessionToken(user.id, user.username, user.session_version));
+  await issueSession(c, user.id, user.username, user.session_version);
   return c.json({
     user: {
       id: user.id,
@@ -154,11 +208,7 @@ auth.post("/logout", authMiddleware, async (c) => {
     .set((expression) => ({ session_version: expression("session_version", "+", 1) }))
     .where("id", "=", c.get("session").userId)
     .execute();
-  deleteCookie(c, SESSION_COOKIE, {
-    path: "/",
-    secure: config.COOKIE_SECURE,
-    sameSite: config.COOKIE_SAME_SITE,
-  });
+  clearSessionCookies(c);
   return c.json({ success: true });
 });
 
@@ -211,7 +261,7 @@ auth.put("/profile", authMiddleware, async (c) => {
     })
     .where("id", "=", session.userId)
     .execute();
-  setSessionCookie(c, await createSessionToken(session.userId, parsed.data.username, session.sessionVersion));
+  await issueSession(c, session.userId, parsed.data.username, session.sessionVersion);
   const state = await db
     .selectFrom("users")
     .select("credential_reset_required")
@@ -254,7 +304,7 @@ auth.put("/password", authMiddleware, rateLimit(5, 60_000), async (c) => {
     .select("username")
     .where("id", "=", session.userId)
     .executeTakeFirstOrThrow();
-  setSessionCookie(c, await createSessionToken(session.userId, currentUser.username, newVersion));
+  await issueSession(c, session.userId, currentUser.username, newVersion);
   return c.json({ success: true });
 });
 

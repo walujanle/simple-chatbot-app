@@ -55,6 +55,8 @@ const envSchema = z.object({
   SEARXNG_BASE_URL: z.string().default(""),
   MAX_CHATS_PER_USER: z.coerce.number().int().min(1).max(10_000).default(200),
   MAX_MESSAGES_PER_CHAT: z.coerce.number().int().min(10).max(100_000).default(1000),
+  SESSION_IDLE_TIMEOUT_HOURS: z.coerce.number().int().min(0).max(720).default(2),
+  SESSION_REFRESH_INTERVAL_SECONDS: z.coerce.number().int().min(30).max(3600).default(300),
 });
 
 const parseResult = envSchema.safeParse(process.env);

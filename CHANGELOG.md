@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.2 - 21 June 2026
+
+### Added
+
+- **Double-Submit CSRF cookie pattern**: Implement defense-in-depth against Cross-Site Request Forgery (CSRF). A cryptographically secure, random CSRF token is set on user login/register as a non-HttpOnly cookie, and must be submitted via the `X-CSRF-Token` request header for all state-changing API operations.
+- **Session idle timeouts with sliding window refresh**: Session expiration is now subject to inactivity. Users are logged out after 2 hours of idle time (configurable via `SESSION_IDLE_TIMEOUT_HOURS`). The JWT token automatically updates the last activity timestamp using a sliding-window mechanism when active requests occur.
+- **Per-username rate limiting**: A separate rate limit of 5 failed login attempts per 15 minutes is enforced per-username, mitigating distributed credential-stuffing attacks.
+- **Hardened cookie deletion**: Session and CSRF cookies are explicitly cleared with proper `HttpOnly` and path attributes upon user logout.
+
 ## 0.2.1 - 21 June 2026
 
 ### Fixed

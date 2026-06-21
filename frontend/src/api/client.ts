@@ -1,6 +1,12 @@
 import type { Chat, Message, ProviderConfig, ProviderConfigInput, StreamChunk, User } from "@/types";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/+$/, "");
+const UNSAFE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
+function getCsrfToken(): string {
+  const match = document.cookie.match(/(?:^|;\s*)(?:__Host-)?chatbot_csrf=([^;]+)/);
+  return match?.[1] ?? "";
+}
 
 export class ApiError extends Error {
   constructor(
@@ -37,10 +43,12 @@ class ApiClient {
     }
 
     try {
+      const method = (requestOptions.method || "GET").toUpperCase();
+      const csrfHeaders: Record<string, string> = UNSAFE_METHODS.has(method) ? { "X-CSRF-Token": getCsrfToken() } : {};
       const response = await fetch(`${API_BASE}${path}`, {
         ...requestOptions,
         credentials: "include",
-        headers: { "Content-Type": "application/json", ...requestOptions.headers },
+        headers: { "Content-Type": "application/json", ...csrfHeaders, ...requestOptions.headers },
       });
       if (!response.ok) {
         const errorBody = await response.json().catch(() => null);
@@ -176,7 +184,7 @@ class ApiClient {
       const response = await fetch(`${API_BASE}/api/chats/${chatId}/messages/stream`, {
         method: "POST",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": getCsrfToken() },
         body: JSON.stringify({ content, webSearch, thinking }),
         signal: controller.signal,
       });

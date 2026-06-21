@@ -18,11 +18,13 @@ This design is encrypted at rest for provider keys, not end-to-end encrypted or 
 
 - Passwords use `bcryptjs` cost 12. Lower-cost bcrypt hashes are upgraded after successful login.
 - New and changed passwords are limited to bcrypt's 72-byte UTF-8 input boundary.
-- Sessions are HS256-signed JWTs stored only in HttpOnly cookies.
+- Sessions are HS256-signed JWTs stored only in HttpOnly cookies (`chatbot_session`).
+- Session idle timeouts are enforced at 2 hours (customizable via `SESSION_IDLE_TIMEOUT_HOURS`) using a sliding window refresh mechanism that updates the `lastActivity` claim on active requests.
 - Session expiry is checked cryptographically; a database `session_version` revokes existing sessions after logout or password change.
 - Every chat and provider route resolves data under the authenticated user ID.
-- State-changing requests require an exact configured `Origin` in addition to CORS.
+- Cross-Site Request Forgery (CSRF) is prevented via a double-submit cookie pattern. State-changing requests (`POST`, `PUT`, `PATCH`, `DELETE`) require both matching `Origin` header validation and a client-supplied `X-CSRF-Token` header that matches the cryptographically signed `csrfToken` claim inside the session JWT.
 - Secure cookies use the `__Host-` prefix, `Path=/`, no `Domain`, and `Secure`.
+- Logout deletes both the session cookie and CSRF cookie with strict `HttpOnly` and path attributes.
 
 ### Credential Protection
 
@@ -59,7 +61,7 @@ These controls reduce SSRF risk but do not replace outbound firewall or egress p
 - Provider requests have deadlines and active streams are aborted during graceful shutdown.
 - Database and outbound connection pools are closed during shutdown.
 - Current structured log call sites emit operational event names, request IDs, counts, hosts, or error types and intentionally omit prompts, credentials, queries, and response bodies.
-- Rate limits are bounded, process-local, route-specific, and primarily keyed by client IP. Trusted proxy parsing is disabled unless explicitly configured.
+- Rate limits are bounded, process-local, route-specific, and primarily keyed by client IP. A secondary rate limiter restricts failed login attempts by username (maximum 5 attempts per 15-minute window) to mitigate distributed credential-stuffing attacks. Trusted proxy parsing is disabled unless explicitly configured.
 
 Future log fields must follow the same privacy rule; the logger does not automatically redact arbitrary values.
 
