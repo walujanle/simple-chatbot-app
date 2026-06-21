@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0 - 21 June 2026
+
+### Added
+
+- **Multiple API Keys & AI Models Management**: Users can now store multiple API key configurations, reuse API keys across multiple models, switch models on the fly directly from the chat page header, and edit or delete configurations individually.
+
 ## 0.1.3 - 13 June 2026
 
 ### Added
