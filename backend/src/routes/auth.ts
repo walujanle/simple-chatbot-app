@@ -95,11 +95,12 @@ async function issueSession(
   userId: number | bigint,
   username: string,
   sessionVersion: number,
-): Promise<void> {
+): Promise<string> {
   const csrfToken = generateCsrfToken();
   const token = await createSessionToken(userId, username, sessionVersion, csrfToken);
   setSessionCookie(c, token);
   setCsrfCookie(c, csrfToken);
+  return csrfToken;
 }
 
 auth.get("/config", (c) => c.json({ registrationEnabled: config.REGISTRATION_ENABLED }));
@@ -140,7 +141,7 @@ auth.post("/register", rateLimit(5, 60_000), async (c) => {
       active_provider: null,
       created_at: nowIso(),
     });
-    await issueSession(c, userId, parsed.data.username, 0);
+    const csrfToken = await issueSession(c, userId, parsed.data.username, 0);
     return c.json(
       {
         user: {
@@ -148,6 +149,7 @@ auth.post("/register", rateLimit(5, 60_000), async (c) => {
           username: parsed.data.username,
           credentialResetRequired: false,
         },
+        csrfToken,
       },
       201,
     );
@@ -192,13 +194,14 @@ auth.post("/login", rateLimit(10, 60_000), async (c) => {
       .execute();
   }
 
-  await issueSession(c, user.id, user.username, user.session_version);
+  const csrfToken = await issueSession(c, user.id, user.username, user.session_version);
   return c.json({
     user: {
       id: user.id,
       username: user.username,
       credentialResetRequired: user.credential_reset_required === 1,
     },
+    csrfToken,
   });
 });
 
@@ -229,6 +232,7 @@ auth.get("/profile", authMiddleware, async (c) => {
       system_prompt: user.system_prompt,
       credentialResetRequired: user.credential_reset_required === 1,
     },
+    csrfToken: session.csrfToken,
   });
 });
 
@@ -261,7 +265,7 @@ auth.put("/profile", authMiddleware, async (c) => {
     })
     .where("id", "=", session.userId)
     .execute();
-  await issueSession(c, session.userId, parsed.data.username, session.sessionVersion);
+  const csrfToken = await issueSession(c, session.userId, parsed.data.username, session.sessionVersion);
   const state = await db
     .selectFrom("users")
     .select("credential_reset_required")
@@ -274,6 +278,7 @@ auth.put("/profile", authMiddleware, async (c) => {
       system_prompt: parsed.data.system_prompt,
       credentialResetRequired: state.credential_reset_required === 1,
     },
+    csrfToken,
   });
 });
 
@@ -304,8 +309,8 @@ auth.put("/password", authMiddleware, rateLimit(5, 60_000), async (c) => {
     .select("username")
     .where("id", "=", session.userId)
     .executeTakeFirstOrThrow();
-  await issueSession(c, session.userId, currentUser.username, newVersion);
-  return c.json({ success: true });
+  const csrfToken = await issueSession(c, session.userId, currentUser.username, newVersion);
+  return c.json({ success: true, csrfToken });
 });
 
 export { auth as authRoutes };

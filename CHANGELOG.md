@@ -5,6 +5,7 @@
 ### Fixed
 
 - **CORS preflight rejection for X-CSRF-Token**: Allow the `X-CSRF-Token` header in the CORS preflight response headers (`Access-Control-Allow-Headers`) to prevent browser blocks on cross-origin requests from the frontend to the backend.
+- **CSRF validation failure on cross-origin/subdomain deployments**: Pass the CSRF token in the JSON response body of authentication endpoints and store it in-memory on the frontend, resolving 403 Forbidden errors when the frontend and backend are hosted on different subdomains (preventing browser cookie access restrictions).
 
 ## 0.2.2 - 21 June 2026
 

@@ -3,7 +3,10 @@ import type { Chat, Message, ProviderConfig, ProviderConfigInput, StreamChunk, U
 const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/+$/, "");
 const UNSAFE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
+let memoryCsrfToken = "";
+
 function getCsrfToken(): string {
+  if (memoryCsrfToken) return memoryCsrfToken;
   const match = document.cookie.match(/(?:^|;\s*)(?:__Host-)?chatbot_csrf=([^;]+)/);
   return match?.[1] ?? "";
 }
@@ -60,7 +63,11 @@ class ApiClient {
         if (response.status === 401) window.dispatchEvent(new Event("auth:unauthorized"));
         throw error;
       }
-      return (await response.json()) as T;
+      const data = await response.json();
+      if (data && typeof data === "object" && "csrfToken" in data && typeof data.csrfToken === "string") {
+        memoryCsrfToken = data.csrfToken;
+      }
+      return data as T;
     } catch (error) {
       if (error instanceof ApiError) throw error;
       if (error instanceof Error && error.name === "AbortError")
